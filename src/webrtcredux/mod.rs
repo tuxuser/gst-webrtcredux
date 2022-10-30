@@ -6,6 +6,7 @@ use gst::subclass::prelude::ObjectSubclassExt;
 use gst::ErrorMessage;
 
 mod sender;
+mod receiver;
 
 mod imp;
 
@@ -163,6 +164,10 @@ impl WebRtcRedux {
 
     pub async fn wait_for_all_tracks(&self) {
         imp::WebRtcRedux::from_instance(self).wait_for_all_tracks().await;
+    }
+
+    pub async fn start_listening_for_sources(&self) -> Result<(), ErrorMessage> {
+        imp::WebRtcRedux::from_instance(&self).start_listening_for_sources().await
     }
 }
 

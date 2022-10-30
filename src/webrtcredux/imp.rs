@@ -4,6 +4,7 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use futures::Future;
 use futures::executor::block_on;
+use gst::glib::clone::Downgrade;
 use tokio::sync::{Mutex as AsyncMutex, oneshot};
 
 use anyhow::{Context, Error};
@@ -38,12 +39,15 @@ pub use webrtc::peer_connection::policy::bundle_policy::RTCBundlePolicy;
 pub use webrtc::peer_connection::policy::sdp_semantics::RTCSdpSemantics;
 pub use webrtc::peer_connection::sdp::sdp_type::RTCSdpType;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
+use webrtc::rtp_transceiver::rtp_receiver::RTCRtpReceiver;
 pub use webrtc::rtp_transceiver::{RTCRtpTransceiverInit, RTCRtpTransceiver};
 pub use webrtc::rtp_transceiver::rtp_codec::{RTCRtpCodecCapability, RTPCodecType};
 use webrtc::track::track_local::TrackLocal;
 use webrtc::track::track_local::track_local_static_sample::TrackLocalStaticSample;
+use webrtc::track::track_remote::TrackRemote;
 use crate::sdp::LineEnding;
 use crate::webrtcredux::sender::WebRtcReduxSender;
+use crate::webrtcredux::receiver::WebRtcReduxReceiver;
 
 use super::sdp::SDP;
 
@@ -182,6 +186,7 @@ struct State {
     audio_state: HashMap<usize, String>,
     next_audio_pad_id: usize,
     streams: HashMap<String, InputStream>,
+    sources: HashMap<String, WebRtcReduxReceiver>,
     handle: Option<Handle>,
     on_all_tracks_added_send: Option<oneshot::Sender<()>>,
     on_all_tracks_added: Option<oneshot::Receiver<()>>,
@@ -280,6 +285,16 @@ impl WebRtcRedux {
             },
             _ => pad.event_default(Some(element), event)
         }
+    }
+
+    fn src_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
+        dbg!("src_event", pad, event);
+        false
+    }
+
+    fn src_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
+        dbg!("src_query", pad, query);
+        false
     }
 
     fn create_track(&self, name: &str, caps: &gst::event::Caps<&EventRef>) {
@@ -654,6 +669,43 @@ impl WebRtcRedux {
         all.await.unwrap();
     }
 
+    pub async fn start_listening_for_sources(&self) -> Result<(), ErrorMessage> {
+        let webrtc_state = self.webrtc_state.lock().await;
+        let peer_connection = WebRtcRedux::get_peer_connection(&webrtc_state)?;
+
+        peer_connection.on_track(Box::new(move |track: Option<Arc<TrackRemote>>, _receiver: Option<Arc<RTCRtpReceiver>>| {
+            if let Some(track) = track {
+                Box::pin(async move {
+                    let codec = track.codec().await;
+                    let mime_type = codec.capability.mime_type.to_lowercase();
+                    let handle = self.runtime_handle();
+                    let receiver = WebRtcReduxReceiver::default();
+                    if mime_type == MIME_TYPE_OPUS.to_lowercase() {
+                        println!("Got Opus track, saving to disk as output.opus (48 kHz, 2 channels)");
+                        receiver.add_info(track, handle, crate::webrtcredux::receiver::MediaType::Audio, None);
+                        /*
+                        if let None = state.lock().unwrap().sources.get("src_1") {
+                            state.lock().unwrap().sources.insert("src_1".to_owned(), receiver);
+                        }
+                        */
+                    } else if mime_type == MIME_TYPE_H264.to_lowercase() {
+                        println!("Got h264 track, saving to disk as output.h264");
+                        receiver.add_info(track, handle, crate::webrtcredux::receiver::MediaType::Video, None);    
+                        /*
+                        if let None = state.lock().unwrap().sources.get("src_0") {
+                            state.lock().unwrap().sources.insert("src_0".to_owned(), receiver);
+                        }
+                        */
+                    }
+                })
+            }else {
+                Box::pin(async {})
+            }
+        })).await;
+
+        Ok(())
+    }
+
     fn runtime_handle(&self) -> Handle {
         self.state.lock().unwrap().handle.as_ref().unwrap_or(RUNTIME.handle()).clone()
     }
@@ -721,7 +773,15 @@ impl ElementImpl for WebRtcRedux {
             )
                 .unwrap();
 
-            vec![video_pad_template, audio_pad_template]
+            let source_pad_template = gst::PadTemplate::new(
+                "src_%u",
+                gst::PadDirection::Src,
+                gst::PadPresence::Sometimes,
+                &gst::Caps::new_any(),
+            )
+                .unwrap();
+
+            vec![video_pad_template, audio_pad_template, source_pad_template]
         });
 
         PAD_TEMPLATES.as_ref()
