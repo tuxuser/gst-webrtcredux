@@ -1,5 +1,6 @@
 # WebRTC Redux - Interactive example
-This example consist in a videotestsrc encoded with x264enc streamed to a browser through webrtc.
+This example consist of a webcam/microphone stream (V: VP8, A: Opus) from the browser sent to
+gstreamer/webrtc-rs client through webrtc.
 
 ## Instructions
 ### Run this example
@@ -7,7 +8,5 @@ This example consist in a videotestsrc encoded with x264enc streamed to a browse
 cargo run
 ```
 ### Open www/index.html in your browser
-### Copy the base64 encoded string from the first box and press enter
-### Wait for ```Base64 Session Description for the browser copied to the cliboard``` to appear on your console
-### Paste your clipboard content in the second box
-### Click on the "Start Session" button
+### Copy the base64 encoded string from the CLI into the first box and press the "Start session" button
+### Copy the base64 encoded string from the second box into the clipboard and hit "ENTER" in the CLI window
