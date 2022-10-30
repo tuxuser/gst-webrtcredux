@@ -18,6 +18,7 @@ use webrtc::ice_transport::ice_gatherer::OnLocalCandidateHdlrFn;
 use webrtc::peer_connection::OnICEConnectionStateChangeHdlrFn;
 use webrtc::peer_connection::OnNegotiationNeededHdlrFn;
 use webrtc::peer_connection::OnPeerConnectionStateChangeHdlrFn;
+use webrtc::peer_connection::OnTrackHdlrFn;
 use webrtc::rtp_transceiver::RTCRtpTransceiverInit;
 use webrtc::rtp_transceiver::rtp_codec::RTPCodecType;
 
@@ -139,6 +140,13 @@ impl WebRtcRedux {
     {
         imp::WebRtcRedux::from_instance(self)
             .on_peer_connection_state_change(f)
+            .await
+    }
+
+    pub async fn on_track(&self, f: OnTrackHdlrFn) -> Result<(), ErrorMessage>
+    {
+        imp::WebRtcRedux::from_instance(self)
+            .on_track(f)
             .await
     }
 

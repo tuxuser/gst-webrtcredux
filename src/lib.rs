@@ -1,6 +1,7 @@
 use gst::glib;
 pub mod webrtcredux;
 pub use crate::webrtcredux::*;
+pub use webrtc;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     webrtcredux::register(plugin)?;

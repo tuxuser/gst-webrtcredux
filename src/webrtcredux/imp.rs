@@ -33,7 +33,7 @@ pub use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::peer_connection::configuration::RTCConfiguration;
 pub use webrtc::peer_connection::offer_answer_options::RTCAnswerOptions;
 pub use webrtc::peer_connection::offer_answer_options::RTCOfferOptions;
-use webrtc::peer_connection::{RTCPeerConnection, OnNegotiationNeededHdlrFn, OnICEConnectionStateChangeHdlrFn, OnPeerConnectionStateChangeHdlrFn};
+use webrtc::peer_connection::{RTCPeerConnection, OnNegotiationNeededHdlrFn, OnICEConnectionStateChangeHdlrFn, OnPeerConnectionStateChangeHdlrFn, OnTrackHdlrFn};
 pub use webrtc::peer_connection::policy::bundle_policy::RTCBundlePolicy;
 pub use webrtc::peer_connection::policy::sdp_semantics::RTCSdpSemantics;
 pub use webrtc::peer_connection::sdp::sdp_type::RTCSdpType;
@@ -599,6 +599,18 @@ impl WebRtcRedux {
 
         peer_connection
             .on_peer_connection_state_change(Box::new(f))
+            .await;
+
+        Ok(())
+    }
+
+    pub async fn on_track(&self, f: OnTrackHdlrFn) -> Result<(), ErrorMessage>
+    {
+        let webrtc_state = self.webrtc_state.lock().await;
+        let peer_connection = WebRtcRedux::get_peer_connection(&webrtc_state)?;
+
+        peer_connection
+            .on_track(Box::new(f))
             .await;
 
         Ok(())
